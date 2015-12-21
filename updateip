@@ -1,0 +1,131 @@
+#!/bin/bash
+#
+# Script to detect when the ISP changes the public IP
+# Works with Zoneedit, but can be modified to work with other DNS providers
+# Tested for Ubuntu 14.04LTS
+#
+# Written by Andres Gonzalez (www.andresgonzalez.com)
+#
+# Important: Computer must have configured the FQDN
+# Configure the hostname in /etc/hostname
+# and the domain name in /etc/hosts as in the following example:
+# 127.0.1.1	<hostname>.<domain>	<hostname>
+#
+# Configure here the username and auth token
+# Auth token can be obtained in https://cp.zoneedit.com/manage/domains/dyn/
+
+USERNAME='username'
+AUTHTOKEN='auth token'
+LOGFILE='/var/log/updateip.log'
+IPURL='http://dynamic.zoneedit.com/checkip.html'
+
+if [ ! -f $LOGFILE ]; then touch $LOGFILE; fi
+
+# Function to validate a text as a valid ip address
+# Taken from http://www.linuxjournal.com/content/validating-ip-address-bash-script
+# By Mitch Frazier
+function valid_ip()
+{
+    local  ip=$1
+    local  stat=1
+
+    if [[ $ip =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        OIFS=$IFS
+        IFS='.'
+        ip=($ip)
+        IFS=$OIFS
+        [[ ${ip[0]} -le 255 && ${ip[1]} -le 255 \
+            && ${ip[2]} -le 255 && ${ip[3]} -le 255 ]]
+        stat=$?
+    fi
+    return $stat
+}
+
+NSLOOKUP=$(nslookup $(hostname -f))
+
+# Detects when the nslookup times out, reports link down and exits
+if [[ $NSLOOKUP =~ 'connection timed out' ]]
+then
+
+  if [[ ! $(tail -n 1 $LOGFILE) =~ "Link down" ]]
+  then
+    echo "$(date): Link down" >> $LOGFILE
+  fi
+  exit 1
+
+fi
+
+# Check the ip informed by dns for my fqdn
+# Example of nslookup answer:
+# $ nslookup $(hostname -f)
+# Server:	<name of DNS>
+# Address:	<ip of DNS>
+#
+# Non-authoritative answer:
+# Name:	<your fqdn>
+# Address: <your ip>
+#
+# The next lines extracts the last part of the output, 
+# after ..."answer:" ... "Address: "
+
+PUBLISHEDIP=${NSLOOKUP##*answer:*Address: }
+
+# Checks if nslookup returned a valid IP address
+if valid_ip $PUBLISHEDIP
+
+then
+  # nslookup returned a valid ip
+
+  # Check for my actual natted public ip
+
+  # icanhazip.com returns the source public ip address whithout any other text
+  MYIP=$(curl --silent $IPURL)
+
+  # if it returned a valid ip
+  if valid_ip $MYIP
+
+  then
+    #icanhazip returned a valid ip
+
+    #Check if both ip's match
+
+    if  [ "$MYIP" = "$PUBLISHEDIP" ]
+
+    then
+
+      if [[ ! $(tail -n 1 $LOGFILE) =~ "Ok with IP $MYIP" ]]
+      then
+        echo "$(date): Ok with IP $MYIP" >> $LOGFILE
+      fi
+    else
+      # ip has changed
+
+      # Report the change
+      printf "%s: IP mismatch. Public IP: %s DNS IP: %s\n" "$(date)" "$MYIP" "$PUBLISHEDIP" >> $LOGFILE
+
+      # Update dyn dns record
+
+      # Prepares the URL for zoneedit to update the dyn record
+      URL="https://${USERNAME}:${AUTHTOKEN}@dynamic.zoneedit.com/auth/dynamic.html?host=$(hostname -f)&dnsto=${MYIP}"
+
+      OUTPUT=$(curl --silent "$URL")
+
+      echo "$(date): DNS change requested with result: $OUTPUT" >> $LOGFILE
+
+    fi
+
+  else
+  #Error with icanhazip
+
+  printf "%s: Error with icanhazip.com. Returned:\n%s\n" "$(date)" "$MYIP" >> $LOGFILE
+
+  fi
+
+
+else
+
+# Error with nslookup
+printf "%s: Error with nslookup\n%s\n" "$(date)" "$PUBLISHEDIP" >> $LOGFILE
+
+fi
+
