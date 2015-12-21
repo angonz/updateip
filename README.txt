@@ -2,7 +2,7 @@
 
 If you have a server behind an ISP without a fixed IP, the ISP may change its public IP anytime. Actually this may happen after a service outage or a modem reset.
 There are some programs that detect this situation and can update the public IP address in the DNS accordingly.
-However, if the server is behind a router, it will never know when the public address has changed.
+However, if the server has a private IP address and is behind a router that NATs it to a public address, it will never know when the public address has changed.
 
 This script detects when the public address has changed, even regardless the private IP address of the server. Then it updates the DYN record of the DNS server.
 
