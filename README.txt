@@ -14,12 +14,13 @@ Installation
 This is a bash script tested in Ubuntu 14.04 LTS.
 
 - Copy updateip to a suitable folder for custom scripts (normally /usr/local/bin)
-- Creat a crontab entry to execute the script periodically. Every 30 min show be fine. Not too fast, because the DNS server may block your updates and you may load the server unnecessarily.
+- Create a crontab entry to execute the script periodically. Every 30 min show be fine. Not too fast, because the DNS server may block your updates and you may load the server unnecessarily.
 In Ubuntu, a way to do this is:
 	- sudo crontab-e
 	In the editor window, append the following line to the end of the file:
 	0,30 * * * * /usr/local/bin/updateip
 - Edit the USERNAME and AUTHTOKEN with your Zoneedit username and authtoken or password.
+- Grant execution privilege (sudo chmod 755 updateip)
 - You can also run the script from the command line
 
 Logfile
